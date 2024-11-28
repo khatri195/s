@@ -1,0 +1,2 @@
+python-telegram-bot==20.3
+Flask==2.3.3  # Only needed if you're using the keep_alive.py script
