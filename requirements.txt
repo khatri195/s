@@ -1,2 +1,5 @@
 python-telegram-bot==20.3
-Flask==2.3.3  # Only needed if you're using the keep_alive.py script
+Flask==2.3.3
+requests
+httpx  # Lightweight HTTP client needed for webhook handling
+python-telegram-bot[job-queue]
