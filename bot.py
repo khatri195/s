@@ -1,135 +1,201 @@
+import json
 import logging
 import os
-from dotenv import load_dotenv
-from telegram import Update
-from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-from telegram.helpers import escape_markdown
 from flask import Flask
-from threading import Thread
-from keep_alive import keep_alive
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, filters, 
+    CallbackContext, ChatJoinRequestHandler
+)
 
-# Load environment variables from .env file
-load_dotenv()
+# Bot Token & Channel Details
+TOKEN = '7906386980:AAEzysWsp0bvI7doUbpz5Q2OGN280J1Rz2A'  # Replace with your bot token
+CHANNEL_ID = -1001861249831  # Replace with your actual channel ID
+BROADCAST_USER_ID = 5142771710  # Admin user ID for broadcasting
+USER_IDS_FILE = 'user_ids.json'
+NOTIFIED_USERS_FILE = 'notified_users.json'  # New file to track notified users
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+REMINDER_MESSAGE = (
+    "📈 **Daily Trading Signal Reminder**\n\n"
+    "Join us every day for **Expert Trading Signals** and maximize your profits! 💰🔥\n\n"
+    "Stay ahead in the market with accurate trade insights.\n\n"
+    "👉 Join our Signal Channel Now:\n"
+    "https://t.me/+j6JaiV_W5k5iZTRl\n\n"
+    "Let's win together! 🚀📊"
+)
 
-# Set your bot token and channel IDs from environment variables
-TOKEN = os.getenv("TELEGRAM_TOKEN")  # Load the bot token from the .env file
-SOURCE_CHANNEL_ID = int(os.getenv("SOURCE_CHANNEL_ID"))  # Convert to integer
-DESTINATION_CHANNEL_ID_1 = int(os.getenv("DESTINATION_CHANNEL_ID_1"))
-DESTINATION_CHANNEL_ID_2 = int(os.getenv("DESTINATION_CHANNEL_ID_2"))
+# Logging Setup
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-async def copy_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Copy messages from source channel to destination channels."""
-    if update.channel_post and update.channel_post.chat_id == SOURCE_CHANNEL_ID:
-        message = update.channel_post
-        try:
-            if message.text:
-                # Make the message text bold
-                bold_text = f"*{escape_markdown(message.text, version=2)}*"
-                await context.bot.send_message(
-                    chat_id=DESTINATION_CHANNEL_ID_1,
-                    text=bold_text,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Text message copied to {DESTINATION_CHANNEL_ID_1}")
-                
-                await context.bot.send_message(
-                    chat_id=DESTINATION_CHANNEL_ID_2,
-                    text=bold_text,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Text message copied to {DESTINATION_CHANNEL_ID_2}")
-            
-            elif message.photo:
-                # Handle photo messages with captions
-                caption = f"*{escape_markdown(message.caption, version=2)}*" if message.caption else ""
-                photo = message.photo[-1]
-                await context.bot.send_photo(
-                    chat_id=DESTINATION_CHANNEL_ID_1,
-                    photo=photo.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Photo message copied to {DESTINATION_CHANNEL_ID_1}")
-                
-                await context.bot.send_photo(
-                    chat_id=DESTINATION_CHANNEL_ID_2,
-                    photo=photo.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Photo message copied to {DESTINATION_CHANNEL_ID_2}")
-            
-            elif message.document:
-                # Handle document messages with captions
-                caption = f"*{escape_markdown(message.caption, version=2)}*" if message.caption else ""
-                await context.bot.send_document(
-                    chat_id=DESTINATION_CHANNEL_ID_1,
-                    document=message.document.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Document message copied to {DESTINATION_CHANNEL_ID_1}")
-                
-                await context.bot.send_document(
-                    chat_id=DESTINATION_CHANNEL_ID_2,
-                    document=message.document.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Document message copied to {DESTINATION_CHANNEL_ID_2}")
-            
-            elif message.video:
-                # Handle video messages with captions
-                caption = f"*{escape_markdown(message.caption, version=2)}*" if message.caption else ""
-                await context.bot.send_video(
-                    chat_id=DESTINATION_CHANNEL_ID_1,
-                    video=message.video.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Video message copied to {DESTINATION_CHANNEL_ID_1}")
-                
-                await context.bot.send_video(
-                    chat_id=DESTINATION_CHANNEL_ID_2,
-                    video=message.video.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Video message copied to {DESTINATION_CHANNEL_ID_2}")
-            
-            elif message.voice:
-                # Handle voice note messages
-                caption = f"*{escape_markdown(message.caption, version=2)}*" if message.caption else ""
-                await context.bot.send_voice(
-                    chat_id=DESTINATION_CHANNEL_ID_1,
-                    voice=message.voice.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Voice message copied to {DESTINATION_CHANNEL_ID_1}")
-                
-                await context.bot.send_voice(
-                    chat_id=DESTINATION_CHANNEL_ID_2,
-                    voice=message.voice.file_id,
-                    caption=caption,
-                    parse_mode=ParseMode.MARKDOWN_V2
-                )
-                logging.info(f"Voice message copied to {DESTINATION_CHANNEL_ID_2}")
-        
-        except Exception as e:
-            logging.error(f"Error copying message: {e}")
+# Load or Initialize User IDs
+try:
+    with open(USER_IDS_FILE, 'r') as f:
+        user_ids = json.load(f)
+except FileNotFoundError:
+    user_ids = []
 
-if __name__ == "__main__":
-    # Start the keep-alive server
-    keep_alive()
+# Load or Initialize Notified Users
+try:
+    with open(NOTIFIED_USERS_FILE, 'r') as f:
+        notified_users = json.load(f)
+except FileNotFoundError:
+    notified_users = []
 
-    # Initialize the Telegram bot
-    telegram_app = ApplicationBuilder().token(TOKEN).build()
-    telegram_app.add_handler(MessageHandler(filters.Chat(SOURCE_CHANNEL_ID), copy_message))
+# Save User IDs
+def save_user_ids():
+    with open(USER_IDS_FILE, 'w') as f:
+        json.dump(user_ids, f)
+
+# Save Notified Users
+def save_notified_users():
+    with open(NOTIFIED_USERS_FILE, 'w') as f:
+        json.dump(notified_users, f)
+
+# Start Command Handler
+async def start(update: Update, context: CallbackContext):
+    """Send the signal channel link when the bot is started and store the user ID."""
+    user_id = update.message.from_user.id
+    if user_id not in user_ids:
+        user_ids.append(user_id)
+        save_user_ids()
+
+    await update.message.reply_text(
+        f"Welcome! 🤩 Unlock Hidden Strategies on My Channel!\n\n"
+        f"https://t.me/+j6JaiV_W5k5iZTRl\n\n"
+        f"💡 This will allow you to earn $200 daily\n\n"
+        f"👉 [Join Now](https://t.me/+j6JaiV_W5k5iZTRl)",
+        parse_mode="Markdown"
+    )
+
+# Broadcast Messages to All Users (Only by Admin)
+async def handle_message(update: Update, context: CallbackContext):
+    """Handle all incoming messages, including broadcasting messages from the admin to all users."""
+    user_id = update.message.from_user.id
+
+    # If the message is from the admin, broadcast it to all users in user_ids.json
+    if user_id == BROADCAST_USER_ID:
+        if update.message.text:
+            for uid in user_ids:
+                try:
+                    await context.bot.send_message(chat_id=uid, text=update.message.text)
+                except Exception as e:
+                    logging.error(f"Failed to send message to {uid}: {e}")
+
+        elif update.message.photo:
+            photo = update.message.photo[-1].file_id
+            caption = update.message.caption if update.message.caption else ""
+            for uid in user_ids:
+                try:
+                    await context.bot.send_photo(chat_id=uid, photo=photo, caption=caption)
+                except Exception as e:
+                    logging.error(f"Failed to send photo to {uid}: {e}")
+
+# Join Request Handler (Auto Accept)
+async def handle_join_request(update: Update, context: CallbackContext):
+    """Automatically accept join requests and send a welcome message."""
+    chat_join_request = update.chat_join_request
+    user_id = chat_join_request.from_user.id
+    chat_id = chat_join_request.chat.id
+
+    if user_id not in user_ids:
+        user_ids.append(user_id)
+        save_user_ids()
+
+    try:
+        await context.bot.approve_chat_join_request(chat_id=chat_id, user_id=user_id)
+        logging.info(f"Approved join request for user {user_id}")
+
+        # Welcome Message
+        caption = (
+            f"🚀 Welcome {chat_join_request.from_user.first_name} 🤩 Unlock Hidden Strategies on My Channel! 📊\n\n"
+            f"🔥 https://t.me/+j6JaiV_W5k5iZTRl\n\n"
+            f"💡 Discover proven methods to earn $200 daily with ease\n\n"
+            f"👉 [Join Now](https://t.me/+j6JaiV_W5k5iZTRl)"
+        )
+
+        await context.bot.send_message(chat_id=user_id, text=caption, parse_mode="Markdown")
+
+    except Exception as e:
+        logging.error(f"Failed to handle join request for {user_id}: {e}")
+
+# Check & Notify Users Who Left (Only Once)
+async def check_removed_users(context: CallbackContext):
+    """Check and notify users who have left the signal channel, but only once."""
+    global user_ids, notified_users
     
-    logging.info("Bot is running...")
-    telegram_app.run_polling()
+    for uid in user_ids:
+        try:
+            # Check if the user is still a member of the channel
+            member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=uid)
+
+            if member.status in ['left', 'kicked']:
+                logging.info(f"User {uid} has left the channel.")
+
+                # Only notify if the user has NOT been notified before
+                if uid not in notified_users:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=uid,
+                            text="⚠️ It looks like you’ve left the channel! Don’t miss out on daily signals and profit opportunities. Rejoin now to stay updated: 📈🔥\n"
+                            "👉 [Click Here to Rejoin](https://t.me/+j6JaiV_W5k5iZTRl)",
+                            parse_mode="Markdown"
+                        )
+                        # Mark user as notified
+                        notified_users.append(uid)
+                        save_notified_users()
+
+                    except Exception as e:
+                        logging.error(f"Failed to notify user {uid} who left: {e}")
+
+        except Exception as e:
+            logging.error(f"Error checking membership for user {uid}: {e}")
+
+# Periodic Reminder Function
+async def periodic_reminder(context: CallbackContext):
+    """Send periodic reminders to all users."""
+    for uid in user_ids:
+        try:
+            await context.bot.send_message(chat_id=uid, text=REMINDER_MESSAGE, parse_mode="Markdown")
+        except Exception as e:
+            logging.error(f"Failed to send reminder to user {uid}: {e}")
+
+# Flask App for Render Hosting
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return "Bot is running"
+
+def run_flask():
+    """Run Flask in a separate thread."""
+    from threading import Thread
+    def run():
+        app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
+
+    thread = Thread(target=run)
+    thread.start()
+
+# Main Function to Run the Bot
+def main():
+    """Start the bot and handle incoming updates."""
+    # Start Flask app in background
+    run_flask()
+
+    # Start the bot application
+    application = ApplicationBuilder().token(TOKEN).build()
+
+    # Add Handlers
+    application.add_handler(CommandHandler('start', start))
+    application.add_handler(MessageHandler(filters.ALL, handle_message))
+    application.add_handler(ChatJoinRequestHandler(handle_join_request))
+
+    # Job Queues for Scheduled Tasks
+    job_queue = application.job_queue
+    job_queue.run_repeating(periodic_reminder, interval=5 * 60 * 60, first=10)  # Every 5 hours
+    job_queue.run_repeating(check_removed_users, interval=120, first=30)  # Every 2 minutes
+
+    # Run the bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
