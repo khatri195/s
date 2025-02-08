@@ -10,7 +10,7 @@ from telegram.ext import (
 
 # Bot Token & Channel Details
 TOKEN = '7906386980:AAEzysWsp0bvI7doUbpz5Q2OGN280J1Rz2A'  # Replace with your bot token
-CHANNEL_ID = -1001861249831  # Replace with your actual channel ID
+CHANNEL_ID = -1002409547209  # Replace with your actual channel ID
 BROADCAST_USER_ID = 5142771710  # Admin user ID for broadcasting
 USER_IDS_FILE = 'user_ids.json'
 NOTIFIED_USERS_FILE = 'notified_users.json'  # New file to track notified users
