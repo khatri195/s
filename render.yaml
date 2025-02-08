@@ -7,8 +7,8 @@ services:
     startCommand: "python main.py"
     envVars:
       - key: TELEGRAM_TOKEN
-        value: "7612146240:AAFyiH0owMGJWQ8UYrE5fnK7roYccg0cTq0"  # Your bot token
+        value: "7906386980:AAEzysWsp0bvI7doUbpz5Q2OGN280J1Rz2A"  # Your bot token
       - key: CHANNEL_LINK
-        value: "https://t.me/+LQPqGKJWktk2NDFk"  # Your Telegram channel link
+        value: "https://t.me/+j6JaiV_W5k5iZTRl"  # Your Telegram channel link
     autoDeploy: true
     healthCheckPath: "/"
