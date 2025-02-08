@@ -1,12 +1,14 @@
-version: 1
 services:
   - type: web
     name: telegram-bot
     env: python
     plan: free
-    runtime: python3
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "python bot.py"
+    startCommand: "python main.py"
     envVars:
-      - key: TELEGRAM_BOT_TOKEN
-        value: "7970351713:AAH37a7sXeLODhk5lE-Kv-rHZfT5rf27z"  # You can also set this in Render dashboard
+      - key: TELEGRAM_TOKEN
+        value: "7612146240:AAFyiH0owMGJWQ8UYrE5fnK7roYccg0cTq0"  # Your bot token
+      - key: CHANNEL_LINK
+        value: "https://t.me/+LQPqGKJWktk2NDFk"  # Your Telegram channel link
+    autoDeploy: true
+    healthCheckPath: "/"
