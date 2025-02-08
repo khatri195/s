@@ -7,6 +7,7 @@ from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, filters, 
     CallbackContext, ChatJoinRequestHandler
 )
+from telegram.error import BadRequest
 
 # Bot Token & Channel Details
 TOKEN = '7906386980:AAEzysWsp0bvI7doUbpz5Q2OGN280J1Rz2A'  # Replace with your bot token
@@ -130,34 +131,30 @@ async def check_removed_users(context: CallbackContext):
 
             if member.status in ['left', 'kicked']:
                 logging.info(f"User {uid} has left the channel.")
-
-                # Only notify if the user has NOT been notified before
+                
                 if uid not in notified_users:
-                    try:
-                        await context.bot.send_message(
-                            chat_id=uid,
-                            text="⚠️ It looks like you’ve left the channel! Don’t miss out on daily signals and profit opportunities. Rejoin now to stay updated: 📈🔥\n"
-                            "👉 [Click Here to Rejoin](https://t.me/+j6JaiV_W5k5iZTRl)",
-                            parse_mode="Markdown"
-                        )
-                        # Mark user as notified
-                        notified_users.append(uid)
-                        save_notified_users()
+                    await context.bot.send_message(
+                        chat_id=uid,
+                        text="⚠️ It looks like you’ve left the channel! Don’t miss out on daily signals and profit opportunities. Rejoin now to stay updated: 📈🔥\n"
+                        "👉 [Click Here to Rejoin](https://t.me/+j6JaiV_W5k5iZTRl)",
+                        parse_mode="Markdown"
+                    )
+                    notified_users.append(uid)
+                    save_notified_users()
 
-                    except Exception as e:
-                        logging.error(f"Failed to notify user {uid} who left: {e}")
+        except BadRequest:  # User is no longer in the channel
+            if uid not in notified_users:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text="⚠️ It looks like you’ve left the channel! Don’t miss out on daily signals and profit opportunities. Rejoin now to stay updated: 📈🔥\n"
+                    "👉 [Click Here to Rejoin](https://t.me/+j6JaiV_W5k5iZTRl)",
+                    parse_mode="Markdown"
+                )
+                notified_users.append(uid)
+                save_notified_users()
 
         except Exception as e:
             logging.error(f"Error checking membership for user {uid}: {e}")
-
-# Periodic Reminder Function
-async def periodic_reminder(context: CallbackContext):
-    """Send periodic reminders to all users."""
-    for uid in user_ids:
-        try:
-            await context.bot.send_message(chat_id=uid, text=REMINDER_MESSAGE, parse_mode="Markdown")
-        except Exception as e:
-            logging.error(f"Failed to send reminder to user {uid}: {e}")
 
 # Flask App for Render Hosting
 app = Flask(__name__)
@@ -178,23 +175,17 @@ def run_flask():
 # Main Function to Run the Bot
 def main():
     """Start the bot and handle incoming updates."""
-    # Start Flask app in background
     run_flask()
 
-    # Start the bot application
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # Add Handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(MessageHandler(filters.ALL, handle_message))
     application.add_handler(ChatJoinRequestHandler(handle_join_request))
 
-    # Job Queues for Scheduled Tasks
     job_queue = application.job_queue
-    job_queue.run_repeating(periodic_reminder, interval=5 * 60 * 60, first=10)  # Every 5 hours
-    job_queue.run_repeating(check_removed_users, interval=120, first=30)  # Every 2 minutes
+    job_queue.run_repeating(check_removed_users, interval=60, first=30)  # Every 1 minute
 
-    # Run the bot
     application.run_polling()
 
 if __name__ == '__main__':
